@@ -1,0 +1,214 @@
+// 全局样式文件
+
+// 重置样式
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+// 滚动条样式
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+// Element Plus 样式覆盖
+.el-card {
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  
+  .el-card__header {
+    padding: 18px 20px;
+    border-bottom: 1px solid #f0f0f0;
+    
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+  }
+  
+  .el-card__body {
+    padding: 20px;
+  }
+}
+
+.el-table {
+  .el-table__header {
+    th {
+      background-color: #fafafa;
+      color: #606266;
+      font-weight: 500;
+    }
+  }
+}
+
+.el-button {
+  border-radius: 6px;
+  
+  &.is-round {
+    border-radius: 20px;
+  }
+}
+
+.el-input {
+  .el-input__inner {
+    border-radius: 6px;
+  }
+}
+
+.el-select {
+  .el-input__inner {
+    border-radius: 6px;
+  }
+}
+
+// 工具类
+.text-center {
+  text-align: center;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.mb-10 {
+  margin-bottom: 10px;
+}
+
+.mb-20 {
+  margin-bottom: 20px;
+}
+
+.mt-10 {
+  margin-top: 10px;
+}
+
+.mt-20 {
+  margin-top: 20px;
+}
+
+.ml-10 {
+  margin-left: 10px;
+}
+
+.mr-10 {
+  margin-right: 10px;
+}
+
+// 状态颜色
+.status-success {
+  color: #67c23a;
+}
+
+.status-warning {
+  color: #e6a23c;
+}
+
+.status-danger {
+  color: #f56c6c;
+}
+
+.status-info {
+  color: #909399;
+}
+
+// 动画
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+// 响应式
+@media (max-width: 768px) {
+  .el-col-xs-24 {
+    width: 100%;
+  }
+  
+  .mobile-hidden {
+    display: none !important;
+  }
+}
+
+// 加载状态
+.loading-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  
+  .loading-text {
+    margin-left: 10px;
+    color: #909399;
+  }
+}
+
+// 空状态
+.empty-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #909399;
+  
+  .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+  
+  .empty-text {
+    font-size: 14px;
+  }
+}
