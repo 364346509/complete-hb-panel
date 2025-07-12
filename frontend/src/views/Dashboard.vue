@@ -226,6 +226,8 @@ import { LineChart, PieChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { getSystemInfo, getSystemStats, getDiskUsage } from '@/api/system'
+import { getWebsiteStats } from '@/api/websites'
+import { getDatabaseStats } from '@/api/databases'
 import { ElMessage } from 'element-plus'
 
 use([CanvasRenderer, LineChart, PieChart, GridComponent, TooltipComponent, LegendComponent])
@@ -538,6 +540,26 @@ const fetchSystemInfo = async () => {
   }
 }
 
+// 获取网站统计
+const fetchWebsiteStats = async () => {
+  try {
+    const response = await getWebsiteStats()
+    websiteStats.value = response.data
+  } catch (error) {
+    console.error('获取网站统计失败:', error)
+  }
+}
+
+// 获取数据库统计
+const fetchDatabaseStats = async () => {
+  try {
+    const response = await getDatabaseStats()
+    databaseStats.value = response.data
+  } catch (error) {
+    console.error('获取数据库统计失败:', error)
+  }
+}
+
 // 格式化字节数
 const formatBytes = (bytes) => {
   if (bytes === 0) return '0 B'
@@ -571,11 +593,19 @@ const handleQuickAction = (action) => {
 onMounted(() => {
   fetchSystemInfo()
   fetchSystemStats()
+  fetchWebsiteStats()
+  fetchDatabaseStats()
 
   // 每5秒更新一次数据
   updateTimer = setInterval(() => {
     fetchSystemStats()
   }, 5000)
+
+  // 每30秒更新一次统计数据
+  setInterval(() => {
+    fetchWebsiteStats()
+    fetchDatabaseStats()
+  }, 30000)
 })
 
 onUnmounted(() => {

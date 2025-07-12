@@ -187,6 +187,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { getWebsiteStats, getWebsites, deleteWebsite, startWebsite, stopWebsite, backupWebsite } from '@/api/websites'
 import CreateWebsiteForm from '@/components/CreateWebsiteForm.vue'
 
 const router = useRouter()
@@ -272,54 +273,73 @@ const handleCommand = async (command) => {
   
   switch (action) {
     case 'backup':
-      ElMessage.info('开始备份网站...')
+      await backupWebsiteAction(website)
       break
     case 'clone':
       ElMessage.info('开始克隆网站...')
       break
     case 'stop':
-      await stopWebsite(website)
+      await stopWebsiteAction(website)
       break
     case 'start':
-      await startWebsite(website)
+      await startWebsiteAction(website)
       break
     case 'delete':
-      await deleteWebsite(website)
+      await deleteWebsiteAction(website)
       break
   }
 }
 
-const stopWebsite = async (website) => {
+const stopWebsiteAction = async (website) => {
   try {
     await ElMessageBox.confirm(`确定要停止网站 ${website.name} 吗？`, '确认操作', {
       type: 'warning'
     })
-    // 调用API停止网站
+
+    await stopWebsite(website.id)
     ElMessage.success('网站已停止')
     fetchWebsites()
   } catch (error) {
-    // 用户取消操作
+    if (error !== 'cancel') {
+      ElMessage.error('停止网站失败')
+    }
   }
 }
 
-const startWebsite = async (website) => {
-  // 调用API启动网站
-  ElMessage.success('网站已启动')
-  fetchWebsites()
+const startWebsiteAction = async (website) => {
+  try {
+    await startWebsite(website.id)
+    ElMessage.success('网站已启动')
+    fetchWebsites()
+  } catch (error) {
+    ElMessage.error('启动网站失败')
+  }
 }
 
-const deleteWebsite = async (website) => {
+const deleteWebsiteAction = async (website) => {
   try {
     await ElMessageBox.confirm(`确定要删除网站 ${website.name} 吗？此操作不可恢复！`, '危险操作', {
       type: 'error',
       confirmButtonText: '确定删除',
       confirmButtonClass: 'el-button--danger'
     })
-    // 调用API删除网站
+
+    await deleteWebsite(website.id)
     ElMessage.success('网站已删除')
     fetchWebsites()
   } catch (error) {
-    // 用户取消操作
+    if (error !== 'cancel') {
+      ElMessage.error('删除网站失败')
+    }
+  }
+}
+
+const backupWebsiteAction = async (website) => {
+  try {
+    await backupWebsite(website.id, 'full')
+    ElMessage.success('网站备份任务已启动')
+  } catch (error) {
+    ElMessage.error('启动备份失败')
   }
 }
 
@@ -332,19 +352,25 @@ const handleCreateSuccess = () => {
 const fetchWebsites = async () => {
   loading.value = true
   try {
-    // 模拟API调用
-    setTimeout(() => {
-      websiteStats.value = {
-        total: websites.value.length,
-        running: websites.value.filter(w => w.status === 'running').length,
-        stopped: websites.value.filter(w => w.status === 'stopped').length,
-        ssl: websites.value.filter(w => w.ssl_type !== 'none').length
-      }
-      total.value = websites.value.length
-      loading.value = false
-    }, 500)
+    const [websitesResponse, statsResponse] = await Promise.all([
+      getWebsites({
+        search: searchQuery.value,
+        status: statusFilter.value,
+        php_version: phpFilter.value,
+        page: currentPage.value,
+        size: pageSize.value
+      }),
+      getWebsiteStats()
+    ])
+
+    websites.value = websitesResponse.data
+    total.value = websitesResponse.total || websitesResponse.data.length
+    websiteStats.value = statsResponse.data
+
   } catch (error) {
     ElMessage.error('获取网站列表失败')
+    console.error('获取网站列表失败:', error)
+  } finally {
     loading.value = false
   }
 }

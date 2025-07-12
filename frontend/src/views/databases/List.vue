@@ -193,6 +193,17 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  getDatabaseStats,
+  getDatabases,
+  deleteDatabase,
+  backupDatabase,
+  batchBackupDatabases,
+  optimizeDatabase,
+  repairDatabase,
+  exportDatabase,
+  importDatabase
+} from '@/api/databases'
 import CreateDatabaseForm from '@/components/CreateDatabaseForm.vue'
 import BackupDatabaseForm from '@/components/BackupDatabaseForm.vue'
 
@@ -282,12 +293,11 @@ const manageDatabase = (database) => {
   router.push(`/databases/${database.id}`)
 }
 
-const backupDatabase = async (database) => {
+const backupDatabaseAction = async (database) => {
   try {
     ElMessage.info('开始备份数据库...')
-    // 调用备份API
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    ElMessage.success('数据库备份成功')
+    await backupDatabase(database.id, 'full', 'gzip')
+    ElMessage.success('数据库备份任务已启动')
     fetchDatabases()
   } catch (error) {
     ElMessage.error('数据库备份失败')
@@ -299,51 +309,58 @@ const handleCommand = async (command) => {
   
   switch (action) {
     case 'export':
-      exportDatabase(database)
+      exportDatabaseAction(database)
       break
     case 'import':
-      importDatabase(database)
+      importDatabaseAction(database)
       break
     case 'optimize':
-      optimizeDatabase(database)
+      optimizeDatabaseAction(database)
       break
     case 'repair':
-      repairDatabase(database)
+      repairDatabaseAction(database)
       break
     case 'users':
       manageDatabaseUsers(database)
       break
     case 'delete':
-      await deleteDatabase(database)
+      await deleteDatabaseAction(database)
       break
   }
 }
 
-const exportDatabase = (database) => {
-  ElMessage.info('开始导出数据库...')
-  // 实现导出逻辑
+const exportDatabaseAction = async (database) => {
+  try {
+    ElMessage.info('开始导出数据库...')
+    await exportDatabase(database.id, 'sql')
+    ElMessage.success('数据库导出任务已启动')
+  } catch (error) {
+    ElMessage.error('导出数据库失败')
+  }
 }
 
-const importDatabase = (database) => {
+const importDatabaseAction = (database) => {
   ElMessage.info('请选择SQL文件导入')
-  // 实现导入逻辑
+  // 实现文件选择和导入逻辑
 }
 
-const optimizeDatabase = async (database) => {
+const optimizeDatabaseAction = async (database) => {
   try {
     ElMessage.info('正在优化数据库表...')
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    const result = await optimizeDatabase(database.id)
     ElMessage.success('数据库优化完成')
+    console.log('优化结果:', result)
   } catch (error) {
     ElMessage.error('数据库优化失败')
   }
 }
 
-const repairDatabase = async (database) => {
+const repairDatabaseAction = async (database) => {
   try {
     ElMessage.info('正在修复数据库表...')
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    const result = await repairDatabase(database.id)
     ElMessage.success('数据库修复完成')
+    console.log('修复结果:', result)
   } catch (error) {
     ElMessage.error('数据库修复失败')
   }
@@ -353,7 +370,7 @@ const manageDatabaseUsers = (database) => {
   router.push(`/databases/${database.id}/users`)
 }
 
-const deleteDatabase = async (database) => {
+const deleteDatabaseAction = async (database) => {
   try {
     await ElMessageBox.confirm(
       `确定要删除数据库 ${database.name} 吗？此操作不可恢复！`,
@@ -364,11 +381,14 @@ const deleteDatabase = async (database) => {
         confirmButtonClass: 'el-button--danger'
       }
     )
-    
+
+    await deleteDatabase(database.id)
     ElMessage.success('数据库删除成功')
     fetchDatabases()
   } catch (error) {
-    // 用户取消操作
+    if (error !== 'cancel') {
+      ElMessage.error('删除数据库失败')
+    }
   }
 }
 
@@ -387,20 +407,23 @@ const handleBackupSuccess = () => {
 const fetchDatabases = async () => {
   loading.value = true
   try {
-    // 模拟API调用
-    setTimeout(() => {
-      const totalSize = databases.value.reduce((sum, db) => sum + db.size, 0)
-      databaseStats.value = {
-        total: databases.value.length,
-        totalSize: totalSize,
-        users: 5, // 模拟数据
-        backups: databases.value.filter(db => db.last_backup).length
-      }
-      total.value = databases.value.length
-      loading.value = false
-    }, 500)
+    const [databasesResponse, statsResponse] = await Promise.all([
+      getDatabases({
+        search: searchQuery.value,
+        page: currentPage.value,
+        size: pageSize.value
+      }),
+      getDatabaseStats()
+    ])
+
+    databases.value = databasesResponse.data
+    total.value = databasesResponse.total || databasesResponse.data.length
+    databaseStats.value = statsResponse.data
+
   } catch (error) {
     ElMessage.error('获取数据库列表失败')
+    console.error('获取数据库列表失败:', error)
+  } finally {
     loading.value = false
   }
 }

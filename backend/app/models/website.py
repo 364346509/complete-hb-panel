@@ -4,7 +4,7 @@
 网站管理数据模型
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Enum, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Enum, ForeignKey, Float
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -24,6 +24,13 @@ class SSLType(enum.Enum):
     LETS_ENCRYPT = "lets_encrypt"
     SELF_SIGNED = "self_signed"
     CUSTOM = "custom"
+
+
+class BackupType(enum.Enum):
+    """备份类型枚举"""
+    FULL = "full"
+    FILES = "files"
+    DATABASE = "database"
 
 
 class Website(Base):

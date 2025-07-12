@@ -166,7 +166,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getPackages, getPackageCategories, installPackage as apiInstallPackage, getInstallTask } from '@/api/packages'
 
