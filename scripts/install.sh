@@ -1,7 +1,9 @@
 #!/bin/bash
 
-# HB-Panel 安装脚本
-# HasBir Linux管理面板一键安装脚本
+# HB-Panel 一键安装脚本
+# 支持 Ubuntu 18.04+, CentOS 7+, Debian 9+
+# 作者: HB-Panel Team
+# 版本: v1.0.0
 
 set -e
 
@@ -14,19 +16,19 @@ NC='\033[0m' # No Color
 
 # 日志函数
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo -e "${GREEN}[INFO]${NC} $1"
 }
 
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+}
+
+log_step() {
+    echo -e "${BLUE}[STEP]${NC} $1"
 }
 
 # 检查是否为root用户
@@ -38,326 +40,291 @@ check_root() {
     fi
 }
 
-# 检查系统版本
-check_system() {
-    log_info "检查系统环境..."
-    
-    if [[ -f /etc/os-release ]]; then
-        . /etc/os-release
-        OS=$NAME
-        VER=$VERSION_ID
+# 检测操作系统
+detect_os() {
+    if [[ -f /etc/redhat-release ]]; then
+        OS="centos"
+        if grep -q "CentOS Linux 7" /etc/redhat-release; then
+            OS_VERSION="7"
+        elif grep -q "CentOS Linux 8" /etc/redhat-release; then
+            OS_VERSION="8"
+        fi
+    elif [[ -f /etc/lsb-release ]]; then
+        OS="ubuntu"
+        OS_VERSION=$(lsb_release -rs)
+    elif [[ -f /etc/debian_version ]]; then
+        OS="debian"
+        OS_VERSION=$(cat /etc/debian_version)
     else
-        log_error "无法检测系统版本"
+        log_error "不支持的操作系统"
         exit 1
     fi
     
-    log_info "检测到系统: $OS $VER"
-    
-    # 支持的系统
-    case $OS in
-        "Ubuntu")
-            if [[ $(echo "$VER >= 18.04" | bc -l) -eq 1 ]]; then
-                log_success "系统版本支持"
-            else
-                log_error "Ubuntu版本需要18.04或更高"
-                exit 1
-            fi
-            ;;
-        "CentOS Linux"|"Rocky Linux"|"AlmaLinux")
-            if [[ $(echo "$VER >= 7" | bc -l) -eq 1 ]]; then
-                log_success "系统版本支持"
-            else
-                log_error "CentOS/Rocky/AlmaLinux版本需要7或更高"
-                exit 1
-            fi
-            ;;
-        "Debian GNU/Linux")
-            if [[ $(echo "$VER >= 9" | bc -l) -eq 1 ]]; then
-                log_success "系统版本支持"
-            else
-                log_error "Debian版本需要9或更高"
-                exit 1
-            fi
-            ;;
-        *)
-            log_warning "未测试的系统，可能存在兼容性问题"
-            ;;
-    esac
+    log_info "检测到操作系统: $OS $OS_VERSION"
 }
 
-# 安装依赖
+# 检查系统要求
+check_requirements() {
+    log_step "检查系统要求..."
+    
+    # 检查内存
+    MEMORY=$(free -m | awk 'NR==2{printf "%.0f", $2}')
+    if [[ $MEMORY -lt 1024 ]]; then
+        log_warn "内存不足1GB，建议至少2GB内存"
+    fi
+    
+    # 检查磁盘空间
+    DISK=$(df -h / | awk 'NR==2{print $4}' | sed 's/G//')
+    if [[ ${DISK%.*} -lt 10 ]]; then
+        log_warn "磁盘空间不足10GB，建议至少20GB空间"
+    fi
+    
+    log_info "系统要求检查完成"
+}
+
+# 安装基础依赖
 install_dependencies() {
-    log_info "安装系统依赖..."
+    log_step "安装基础依赖..."
     
-    if command -v apt-get &> /dev/null; then
-        # Debian/Ubuntu
+    if [[ $OS == "ubuntu" || $OS == "debian" ]]; then
         apt-get update
-        apt-get install -y curl wget git python3 python3-pip python3-venv nodejs npm supervisor nginx
-    elif command -v yum &> /dev/null; then
-        # CentOS/RHEL
+        apt-get install -y curl wget git unzip software-properties-common apt-transport-https ca-certificates gnupg lsb-release
+    elif [[ $OS == "centos" ]]; then
         yum update -y
-        yum install -y curl wget git python3 python3-pip nodejs npm supervisor nginx
-    elif command -v dnf &> /dev/null; then
-        # Fedora/Rocky/AlmaLinux
-        dnf update -y
-        dnf install -y curl wget git python3 python3-pip nodejs npm supervisor nginx
-    else
-        log_error "不支持的包管理器"
-        exit 1
+        yum install -y curl wget git unzip epel-release
     fi
     
-    log_success "系统依赖安装完成"
+    log_info "基础依赖安装完成"
 }
 
-# 创建用户和目录
-setup_user() {
-    log_info "创建HB-Panel用户和目录..."
+# 安装Docker
+install_docker() {
+    log_step "安装Docker..."
     
-    # 创建用户
-    if ! id "hbpanel" &>/dev/null; then
-        useradd -r -s /bin/bash -d /opt/hb-panel hbpanel
-        log_success "用户hbpanel创建成功"
-    else
-        log_info "用户hbpanel已存在"
+    if command -v docker &> /dev/null; then
+        log_info "Docker已安装，跳过安装步骤"
+        return
     fi
     
-    # 创建目录
-    mkdir -p /opt/hb-panel
-    mkdir -p /var/log/hb-panel
-    mkdir -p /etc/hb-panel
+    if [[ $OS == "ubuntu" ]]; then
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+        apt-get update
+        apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    elif [[ $OS == "centos" ]]; then
+        yum install -y yum-utils
+        yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+        yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    elif [[ $OS == "debian" ]]; then
+        curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+        apt-get update
+        apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    fi
     
-    # 设置权限
-    chown -R hbpanel:hbpanel /opt/hb-panel
-    chown -R hbpanel:hbpanel /var/log/hb-panel
+    systemctl start docker
+    systemctl enable docker
     
-    log_success "目录结构创建完成"
+    log_info "Docker安装完成"
 }
 
-# 安装HB-Panel
-install_hbpanel() {
-    log_info "安装HB-Panel..."
+# 安装Docker Compose
+install_docker_compose() {
+    log_step "安装Docker Compose..."
+    
+    if command -v docker-compose &> /dev/null; then
+        log_info "Docker Compose已安装，跳过安装步骤"
+        return
+    fi
+    
+    DOCKER_COMPOSE_VERSION="2.24.1"
+    curl -L "https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    chmod +x /usr/local/bin/docker-compose
+    ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
+    
+    log_info "Docker Compose安装完成"
+}
+
+# 下载HB-Panel
+download_hb_panel() {
+    log_step "下载HB-Panel..."
+    
+    HB_PANEL_DIR="/opt/hb-panel"
+    
+    if [[ -d $HB_PANEL_DIR ]]; then
+        log_warn "HB-Panel目录已存在，正在备份..."
+        mv $HB_PANEL_DIR "${HB_PANEL_DIR}.backup.$(date +%Y%m%d_%H%M%S)"
+    fi
+    
+    git clone https://github.com/364346509/complete-hb-panel.git $HB_PANEL_DIR
+    cd $HB_PANEL_DIR
+    
+    log_info "HB-Panel下载完成"
+}
+
+# 配置环境变量
+setup_environment() {
+    log_step "配置环境变量..."
     
     cd /opt/hb-panel
     
-    # 如果是从git克隆
-    if [[ -d ".git" ]]; then
-        log_info "更新代码..."
-        sudo -u hbpanel git pull
-    else
-        log_info "下载代码..."
-        # 这里应该是实际的git仓库地址
-        sudo -u hbpanel git clone https://github.com/your-repo/hb-panel.git .
-    fi
+    # 生成随机密码
+    MYSQL_ROOT_PASSWORD=$(openssl rand -base64 32)
+    JWT_SECRET_KEY=$(openssl rand -base64 64)
     
-    # 安装后端依赖
-    log_info "安装Python依赖..."
-    cd /opt/hb-panel/backend
-    sudo -u hbpanel python3 -m venv venv
-    sudo -u hbpanel ./venv/bin/pip install -r requirements.txt
-    
-    # 安装前端依赖
-    log_info "安装Node.js依赖..."
-    cd /opt/hb-panel/frontend
-    sudo -u hbpanel npm install
-    
-    # 构建前端
-    log_info "构建前端..."
-    sudo -u hbpanel npm run build
-    
-    log_success "HB-Panel安装完成"
-}
+    # 创建环境配置文件
+    cat > .env << EOF
+# 数据库配置
+MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+MYSQL_DATABASE=hb_panel
+MYSQL_USER=hb_panel
+MYSQL_PASSWORD=$(openssl rand -base64 32)
 
-# 配置数据库
-setup_database() {
-    log_info "初始化数据库..."
-    
-    cd /opt/hb-panel/backend
-    
-    # 创建数据库
-    sudo -u hbpanel ./venv/bin/python -c "
-from app.core.database import init_db
-import asyncio
-asyncio.run(init_db())
-print('数据库初始化完成')
-"
-    
-    # 创建默认管理员用户
-    sudo -u hbpanel ./venv/bin/python -c "
-from app.core.database import SessionLocal
-from app.services.user_service import UserService
+# JWT配置
+JWT_SECRET_KEY=${JWT_SECRET_KEY}
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
 
-db = SessionLocal()
-user_service = UserService(db)
+# 应用配置
+APP_NAME=HB-Panel
+APP_VERSION=1.0.0
+DEBUG=false
 
-# 检查是否已有管理员用户
-admin = user_service.get_user_by_username('admin')
-if not admin:
-    admin = user_service.create_user(
-        username='admin',
-        email='admin@hbpanel.local',
-        password='admin123',
-        full_name='系统管理员',
-        is_superuser=True
-    )
-    print('默认管理员用户创建成功')
-    print('用户名: admin')
-    print('密码: admin123')
-    print('请登录后立即修改密码！')
-else:
-    print('管理员用户已存在')
+# 服务端口
+BACKEND_PORT=8000
+FRONTEND_PORT=3000
+NGINX_PORT=8080
 
-db.close()
-"
-    
-    log_success "数据库配置完成"
-}
-
-# 配置Nginx
-setup_nginx() {
-    log_info "配置Nginx..."
-    
-    cat > /etc/nginx/sites-available/hb-panel << 'EOF'
-server {
-    listen 80;
-    server_name _;
-    
-    # 前端静态文件
-    location / {
-        root /opt/hb-panel/frontend/dist;
-        try_files $uri $uri/ /index.html;
-    }
-    
-    # API代理
-    location /api/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    
-    # 静态资源缓存
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
-        root /opt/hb-panel/frontend/dist;
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
-}
+# 域名配置（可选）
+DOMAIN=localhost
 EOF
     
-    # 启用站点
-    ln -sf /etc/nginx/sites-available/hb-panel /etc/nginx/sites-enabled/
-    
-    # 删除默认站点
-    rm -f /etc/nginx/sites-enabled/default
-    
-    # 测试配置
-    nginx -t
-    
-    log_success "Nginx配置完成"
-}
-
-# 配置Supervisor
-setup_supervisor() {
-    log_info "配置Supervisor..."
-    
-    cat > /etc/supervisor/conf.d/hb-panel.conf << 'EOF'
-[program:hb-panel-backend]
-command=/opt/hb-panel/backend/venv/bin/python main.py
-directory=/opt/hb-panel/backend
-user=hbpanel
-autostart=true
-autorestart=true
-redirect_stderr=true
-stdout_logfile=/var/log/hb-panel/backend.log
-stdout_logfile_maxbytes=50MB
-stdout_logfile_backups=5
-environment=PYTHONPATH="/opt/hb-panel/backend"
-EOF
-    
-    log_success "Supervisor配置完成"
-}
-
-# 配置防火墙
-setup_firewall() {
-    log_info "配置防火墙..."
-    
-    if command -v ufw &> /dev/null; then
-        # Ubuntu防火墙
-        ufw allow 80/tcp
-        ufw allow 443/tcp
-        ufw --force enable
-    elif command -v firewall-cmd &> /dev/null; then
-        # CentOS/RHEL防火墙
-        firewall-cmd --permanent --add-service=http
-        firewall-cmd --permanent --add-service=https
-        firewall-cmd --reload
-    fi
-    
-    log_success "防火墙配置完成"
+    log_info "环境变量配置完成"
 }
 
 # 启动服务
 start_services() {
-    log_info "启动服务..."
+    log_step "启动HB-Panel服务..."
     
-    # 重新加载Supervisor配置
-    supervisorctl reread
-    supervisorctl update
+    cd /opt/hb-panel
     
-    # 启动服务
-    systemctl enable nginx
-    systemctl restart nginx
-    systemctl enable supervisor
-    systemctl restart supervisor
+    # 构建并启动服务
+    docker-compose up -d --build
     
-    # 启动HB-Panel后端
-    supervisorctl start hb-panel-backend
+    # 等待服务启动
+    log_info "等待服务启动..."
+    sleep 30
     
-    log_success "服务启动完成"
+    # 检查服务状态
+    if docker-compose ps | grep -q "Up"; then
+        log_info "HB-Panel服务启动成功"
+    else
+        log_error "HB-Panel服务启动失败"
+        docker-compose logs
+        exit 1
+    fi
+}
+
+# 配置防火墙
+setup_firewall() {
+    log_step "配置防火墙..."
+    
+    if command -v ufw &> /dev/null; then
+        ufw allow 8080/tcp
+        ufw allow 22/tcp
+        ufw --force enable
+    elif command -v firewall-cmd &> /dev/null; then
+        firewall-cmd --permanent --add-port=8080/tcp
+        firewall-cmd --permanent --add-port=22/tcp
+        firewall-cmd --reload
+    fi
+    
+    log_info "防火墙配置完成"
+}
+
+# 创建系统服务
+create_systemd_service() {
+    log_step "创建系统服务..."
+    
+    cat > /etc/systemd/system/hb-panel.service << EOF
+[Unit]
+Description=HB-Panel Service
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/hb-panel
+ExecStart=/usr/local/bin/docker-compose up -d
+ExecStop=/usr/local/bin/docker-compose down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    systemctl daemon-reload
+    systemctl enable hb-panel
+    
+    log_info "系统服务创建完成"
 }
 
 # 显示安装结果
 show_result() {
-    log_success "HB-Panel安装完成！"
-    echo
-    echo "========================================"
-    echo "访问信息:"
-    echo "  URL: http://$(hostname -I | awk '{print $1}')"
-    echo "  用户名: admin"
-    echo "  密码: admin123"
-    echo "========================================"
-    echo
-    log_warning "请立即登录并修改默认密码！"
-    echo
-    echo "服务管理命令:"
-    echo "  查看状态: supervisorctl status hb-panel-backend"
-    echo "  重启后端: supervisorctl restart hb-panel-backend"
-    echo "  查看日志: tail -f /var/log/hb-panel/backend.log"
-    echo "  重启Nginx: systemctl restart nginx"
-    echo
+    log_step "安装完成！"
+    
+    echo ""
+    echo "=========================================="
+    echo "🎉 HB-Panel 安装成功！"
+    echo "=========================================="
+    echo ""
+    echo "📱 访问地址: http://$(curl -s ifconfig.me):8080"
+    echo "🏠 本地访问: http://localhost:8080"
+    echo ""
+    echo "👤 默认账号信息:"
+    echo "   用户名: admin"
+    echo "   密码: admin123"
+    echo ""
+    echo "📁 安装目录: /opt/hb-panel"
+    echo "📋 配置文件: /opt/hb-panel/.env"
+    echo ""
+    echo "🔧 常用命令:"
+    echo "   启动服务: systemctl start hb-panel"
+    echo "   停止服务: systemctl stop hb-panel"
+    echo "   重启服务: systemctl restart hb-panel"
+    echo "   查看状态: systemctl status hb-panel"
+    echo "   查看日志: cd /opt/hb-panel && docker-compose logs"
+    echo ""
+    echo "📚 文档地址: https://github.com/364346509/complete-hb-panel"
+    echo "🐛 问题反馈: https://github.com/364346509/complete-hb-panel/issues"
+    echo ""
+    echo "=========================================="
+    echo "感谢使用 HB-Panel！"
+    echo "=========================================="
 }
 
 # 主函数
 main() {
-    echo "========================================"
-    echo "HB-Panel 安装脚本"
-    echo "HasBir Linux管理面板"
-    echo "========================================"
-    echo
+    echo ""
+    echo "=========================================="
+    echo "🚀 HB-Panel 一键安装脚本"
+    echo "=========================================="
+    echo ""
     
     check_root
-    check_system
+    detect_os
+    check_requirements
     install_dependencies
-    setup_user
-    install_hbpanel
-    setup_database
-    setup_nginx
-    setup_supervisor
-    setup_firewall
+    install_docker
+    install_docker_compose
+    download_hb_panel
+    setup_environment
     start_services
+    setup_firewall
+    create_systemd_service
     show_result
 }
 
-# 运行主函数
+# 执行主函数
 main "$@"
