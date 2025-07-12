@@ -27,6 +27,50 @@ const routes = [
         meta: { title: '仪表盘', icon: 'Monitor' }
       },
       {
+        path: '/websites',
+        name: 'Websites',
+        meta: { title: '网站管理', icon: 'Globe' },
+        children: [
+          {
+            path: '/websites',
+            name: 'WebsitesList',
+            component: () => import('@/views/websites/List.vue'),
+            meta: { title: '网站列表', icon: 'List' }
+          },
+          {
+            path: '/websites/create',
+            name: 'WebsiteCreate',
+            component: () => import('@/views/websites/Create.vue'),
+            meta: { title: '创建网站', icon: 'Plus', hidden: true }
+          },
+          {
+            path: '/websites/:id',
+            name: 'WebsiteDetail',
+            component: () => import('@/views/websites/Detail.vue'),
+            meta: { title: '网站详情', icon: 'Setting', hidden: true }
+          }
+        ]
+      },
+      {
+        path: '/databases',
+        name: 'Databases',
+        meta: { title: '数据库', icon: 'Coin' },
+        children: [
+          {
+            path: '/databases',
+            name: 'DatabasesList',
+            component: () => import('@/views/databases/List.vue'),
+            meta: { title: '数据库列表', icon: 'List' }
+          },
+          {
+            path: '/databases/create',
+            name: 'DatabaseCreate',
+            component: () => import('@/views/databases/Create.vue'),
+            meta: { title: '创建数据库', icon: 'Plus', hidden: true }
+          }
+        ]
+      },
+      {
         path: '/system',
         name: 'System',
         meta: { title: '系统监控', icon: 'Monitor' },

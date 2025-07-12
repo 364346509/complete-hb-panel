@@ -1,98 +1,128 @@
 <template>
-  <div class="package-market">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>软件市场</span>
-          <div class="header-actions">
-            <el-input
-              v-model="searchQuery"
-              placeholder="搜索软件包..."
-              style="width: 300px; margin-right: 16px;"
-              clearable
-              @input="handleSearch"
-            >
-              <template #prefix>
-                <el-icon><Search /></el-icon>
-              </template>
-            </el-input>
-            <el-button type="primary" @click="refreshPackages" :loading="loading">
-              <el-icon><Refresh /></el-icon>
-              刷新
-            </el-button>
-          </div>
-        </div>
-      </template>
-
-      <!-- 分类筛选 -->
-      <div class="category-filter">
-        <el-button-group>
-          <el-button
-            v-for="category in categories"
-            :key="category.name"
-            :type="selectedCategory === category.name ? 'primary' : ''"
-            @click="selectCategory(category.name)"
-          >
-            {{ category.display_name }}
-          </el-button>
-        </el-button-group>
+  <div class="software-store">
+    <!-- 顶部操作栏 -->
+    <div class="page-header">
+      <div class="header-left">
+        <h2>软件商店</h2>
+        <span class="subtitle">一键安装常用软件和运行环境</span>
       </div>
+      <div class="header-right">
+        <el-input
+          v-model="searchQuery"
+          placeholder="搜索软件..."
+          style="width: 300px; margin-right: 16px;"
+          clearable
+          @input="handleSearch"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+        <el-button type="primary" @click="refreshPackages" :loading="loading">
+          <el-icon><Refresh /></el-icon>
+          刷新
+        </el-button>
+      </div>
+    </div>
 
-      <!-- 软件包列表 -->
-      <div class="package-list" v-loading="loading">
-        <el-row :gutter="20">
-          <el-col :span="8" v-for="pkg in packages" :key="pkg.id">
-            <el-card class="package-card" shadow="hover">
-              <div class="package-header">
-                <h3>{{ pkg.display_name || pkg.name }}</h3>
-                <el-tag :type="getStatusType(pkg.status)" size="small">
-                  {{ getStatusText(pkg.status) }}
+    <!-- 快速安装环境 -->
+    <div class="quick-install-section">
+      <h3>一键部署环境</h3>
+      <el-row :gutter="16">
+        <el-col :span="8" v-for="env in environments" :key="env.name">
+          <div class="environment-card" @click="installEnvironment(env)">
+            <div class="env-icon">
+              <img :src="env.icon" :alt="env.name" />
+            </div>
+            <div class="env-info">
+              <h4>{{ env.name }}</h4>
+              <p>{{ env.description }}</p>
+              <div class="env-components">
+                <el-tag v-for="component in env.components" :key="component" size="small">
+                  {{ component }}
                 </el-tag>
               </div>
-              
-              <div class="package-info">
-                <p class="package-description">{{ pkg.description || '暂无描述' }}</p>
-                <div class="package-meta">
-                  <span class="package-version">版本: {{ pkg.version || 'N/A' }}</span>
-                  <span class="package-size">大小: {{ formatSize(pkg.size) }}</span>
+            </div>
+            <div class="env-action">
+              <el-button type="primary" size="small">
+                {{ env.installed ? '已安装' : '一键安装' }}
+              </el-button>
+            </div>
+          </div>
+        </el-col>
+      </el-row>
+    </div>
+
+    <!-- 软件分类 -->
+    <div class="software-categories">
+      <div class="category-tabs">
+        <el-tabs v-model="activeCategory" @tab-change="handleCategoryChange">
+          <el-tab-pane
+            v-for="category in categories"
+            :key="category.name"
+            :label="category.display_name"
+            :name="category.name"
+          >
+            <!-- 软件列表 -->
+            <div class="software-grid" v-loading="loading">
+              <div v-for="software in filteredSoftware" :key="software.id" class="software-card">
+                <div class="software-header">
+                  <div class="software-icon">
+                    <img :src="software.icon" :alt="software.name" />
+                  </div>
+                  <div class="software-info">
+                    <h4>{{ software.display_name }}</h4>
+                    <p class="software-desc">{{ software.description }}</p>
+                    <div class="software-meta">
+                      <span class="version">v{{ software.version }}</span>
+                      <span class="size">{{ formatSize(software.size) }}</span>
+                    </div>
+                  </div>
+                  <div class="software-status">
+                    <el-tag :type="getStatusType(software.status)" size="small">
+                      {{ getStatusText(software.status) }}
+                    </el-tag>
+                  </div>
+                </div>
+
+                <div class="software-actions">
+                  <el-button
+                    v-if="software.status === 'not_installed'"
+                    type="primary"
+                    size="small"
+                    @click="installSoftware(software)"
+                    :loading="isInstalling(software.name)"
+                    style="width: 100%;"
+                  >
+                    {{ isInstalling(software.name) ? '安装中...' : '安装' }}
+                  </el-button>
+                  <el-button
+                    v-else-if="software.status === 'installed'"
+                    type="success"
+                    size="small"
+                    disabled
+                    style="width: 100%;"
+                  >
+                    已安装
+                  </el-button>
+                  <div v-else-if="software.status === 'installed'" class="installed-actions">
+                    <el-button size="small" @click="manageSoftware(software)">管理</el-button>
+                    <el-button size="small" type="danger" @click="uninstallSoftware(software)">卸载</el-button>
+                  </div>
+                </div>
+
+                <div class="software-features" v-if="software.features">
+                  <div class="feature-item" v-for="feature in software.features" :key="feature">
+                    <el-icon><Check /></el-icon>
+                    <span>{{ feature }}</span>
+                  </div>
                 </div>
               </div>
-              
-              <div class="package-actions">
-                <el-button
-                  v-if="pkg.status === 'not_installed'"
-                  type="primary"
-                  size="small"
-                  @click="installPackage(pkg)"
-                  :loading="isInstalling(pkg.name)"
-                >
-                  安装
-                </el-button>
-                <el-button
-                  v-else-if="pkg.status === 'installed'"
-                  type="danger"
-                  size="small"
-                  @click="uninstallPackage(pkg)"
-                  :loading="isInstalling(pkg.name)"
-                >
-                  卸载
-                </el-button>
-                <el-button
-                  v-else-if="pkg.status === 'upgradable'"
-                  type="warning"
-                  size="small"
-                  @click="upgradePackage(pkg)"
-                  :loading="isInstalling(pkg.name)"
-                >
-                  升级
-                </el-button>
-                <el-button size="small" @click="showPackageDetails(pkg)">
-                  详情
-                </el-button>
-              </div>
-            </el-card>
-          </el-col>
-        </el-row>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+    </div>
 
         <!-- 分页 -->
         <div class="pagination-container">
@@ -147,11 +177,159 @@ const currentPage = ref(1)
 const pageSize = ref(12)
 const total = ref(0)
 
-const categories = ref([
-  { name: '', display_name: '全部' }
+// 一键部署环境
+const environments = ref([
+  {
+    name: 'LAMP',
+    description: 'Linux + Apache + MySQL + PHP 经典组合',
+    icon: '/icons/lamp.png',
+    components: ['Apache', 'MySQL', 'PHP'],
+    installed: false
+  },
+  {
+    name: 'LEMP',
+    description: 'Linux + Nginx + MySQL + PHP 高性能组合',
+    icon: '/icons/lemp.png',
+    components: ['Nginx', 'MySQL', 'PHP'],
+    installed: false
+  },
+  {
+    name: 'LNMP',
+    description: 'Linux + Nginx + MySQL + PHP + Redis',
+    icon: '/icons/lnmp.png',
+    components: ['Nginx', 'MySQL', 'PHP', 'Redis'],
+    installed: true
+  }
 ])
-const packages = ref([])
+
+// 软件分类
+const categories = ref([
+  { name: 'web', display_name: 'Web服务器' },
+  { name: 'database', display_name: '数据库' },
+  { name: 'runtime', display_name: '运行环境' },
+  { name: 'cache', display_name: '缓存服务' },
+  { name: 'tools', display_name: '系统工具' },
+  { name: 'security', display_name: '安全软件' }
+])
+
+const activeCategory = ref('web')
+
+// 软件列表
+const allSoftware = ref([
+  // Web服务器
+  {
+    id: 1,
+    name: 'nginx',
+    display_name: 'Nginx',
+    description: '高性能Web服务器和反向代理',
+    category: 'web',
+    version: '1.24.0',
+    size: 2048000,
+    status: 'installed',
+    icon: '/icons/nginx.png',
+    features: ['高并发', '负载均衡', '反向代理', '静态文件服务']
+  },
+  {
+    id: 2,
+    name: 'apache',
+    display_name: 'Apache',
+    description: '世界上最流行的Web服务器',
+    category: 'web',
+    version: '2.4.57',
+    size: 5120000,
+    status: 'not_installed',
+    icon: '/icons/apache.png',
+    features: ['模块化', '.htaccess支持', '虚拟主机', 'SSL/TLS']
+  },
+  // 数据库
+  {
+    id: 3,
+    name: 'mysql',
+    display_name: 'MySQL',
+    description: '最流行的开源关系型数据库',
+    category: 'database',
+    version: '8.0.34',
+    size: 204800000,
+    status: 'installed',
+    icon: '/icons/mysql.png',
+    features: ['ACID事务', '复制', '分区', '存储引擎']
+  },
+  {
+    id: 4,
+    name: 'postgresql',
+    display_name: 'PostgreSQL',
+    description: '先进的开源关系型数据库',
+    category: 'database',
+    version: '15.4',
+    size: 153600000,
+    status: 'not_installed',
+    icon: '/icons/postgresql.png',
+    features: ['JSON支持', '全文搜索', '地理信息', '扩展性']
+  },
+  // 运行环境
+  {
+    id: 5,
+    name: 'php',
+    display_name: 'PHP',
+    description: '流行的Web开发语言',
+    category: 'runtime',
+    version: '8.2.10',
+    size: 51200000,
+    status: 'installed',
+    icon: '/icons/php.png',
+    features: ['多版本', 'FPM', '扩展丰富', 'OPcache']
+  },
+  {
+    id: 6,
+    name: 'nodejs',
+    display_name: 'Node.js',
+    description: 'JavaScript运行时环境',
+    category: 'runtime',
+    version: '18.17.1',
+    size: 30720000,
+    status: 'not_installed',
+    icon: '/icons/nodejs.png',
+    features: ['事件驱动', '非阻塞I/O', 'NPM包管理', 'V8引擎']
+  },
+  // 缓存服务
+  {
+    id: 7,
+    name: 'redis',
+    display_name: 'Redis',
+    description: '高性能内存数据库',
+    category: 'cache',
+    version: '7.2.1',
+    size: 10240000,
+    status: 'installed',
+    icon: '/icons/redis.png',
+    features: ['内存存储', '持久化', '集群', '发布订阅']
+  },
+  {
+    id: 8,
+    name: 'memcached',
+    display_name: 'Memcached',
+    description: '分布式内存缓存系统',
+    category: 'cache',
+    version: '1.6.21',
+    size: 1024000,
+    status: 'not_installed',
+    icon: '/icons/memcached.png',
+    features: ['分布式', '高速缓存', '简单协议', '多线程']
+  }
+])
+
 const installingPackages = ref(new Set())
+
+// 计算属性
+const filteredSoftware = computed(() => {
+  return allSoftware.value.filter(software => {
+    const matchCategory = activeCategory.value === 'all' || software.category === activeCategory.value
+    const matchSearch = !searchQuery.value ||
+      software.display_name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      software.description.toLowerCase().includes(searchQuery.value.toLowerCase())
+    return matchCategory && matchSearch
+  })
+})
 
 const installDialogVisible = ref(false)
 const currentTask = reactive({
@@ -163,36 +341,79 @@ const currentTask = reactive({
   log_output: ''
 })
 
-// 获取软件包分类
-const fetchCategories = async () => {
+// 安装环境
+const installEnvironment = async (env) => {
+  if (env.installed) {
+    ElMessage.info('环境已安装')
+    return
+  }
+
   try {
-    const response = await getPackageCategories()
-    categories.value = [
-      { name: '', display_name: '全部' },
-      ...response.data
-    ]
+    await ElMessageBox.confirm(`确定要安装 ${env.name} 环境吗？`, '确认安装', {
+      type: 'warning'
+    })
+
+    ElMessage.info(`开始安装 ${env.name} 环境...`)
+    // 模拟安装过程
+    setTimeout(() => {
+      env.installed = true
+      ElMessage.success(`${env.name} 环境安装成功`)
+    }, 3000)
+
   } catch (error) {
-    console.error('获取分类失败:', error)
+    // 用户取消
   }
 }
 
-// 获取软件包列表
-const fetchPackages = async () => {
-  loading.value = true
+// 处理分类切换
+const handleCategoryChange = (category) => {
+  activeCategory.value = category
+}
+
+// 安装软件
+const installSoftware = async (software) => {
   try {
-    const response = await getPackages({
-      category: selectedCategory.value || undefined,
-      search: searchQuery.value || undefined,
-      page: currentPage.value,
-      size: pageSize.value
+    await ElMessageBox.confirm(`确定要安装 ${software.display_name} 吗？`, '确认安装', {
+      type: 'warning'
     })
-    packages.value = response.data
-    total.value = response.total || response.data.length
+
+    installingPackages.value.add(software.name)
+    ElMessage.info(`开始安装 ${software.display_name}...`)
+
+    // 模拟安装过程
+    setTimeout(() => {
+      software.status = 'installed'
+      installingPackages.value.delete(software.name)
+      ElMessage.success(`${software.display_name} 安装成功`)
+    }, 3000)
+
   } catch (error) {
-    ElMessage.error('获取软件包列表失败')
-  } finally {
-    loading.value = false
+    if (error !== 'cancel') {
+      ElMessage.error('安装失败')
+    }
+    installingPackages.value.delete(software.name)
   }
+}
+
+// 卸载软件
+const uninstallSoftware = async (software) => {
+  try {
+    await ElMessageBox.confirm(`确定要卸载 ${software.display_name} 吗？`, '确认卸载', {
+      type: 'warning'
+    })
+
+    software.status = 'not_installed'
+    ElMessage.success(`${software.display_name} 卸载成功`)
+
+  } catch (error) {
+    // 用户取消
+  }
+}
+
+// 管理软件
+const manageSoftware = (software) => {
+  ElMessage.info(`打开 ${software.display_name} 管理界面`)
+  // 跳转到软件管理页面
 }
 
 // 搜索处理
