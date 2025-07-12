@@ -132,6 +132,12 @@ const routes = [
         meta: { title: '安全管理', icon: 'Lock' },
         children: [
           {
+            path: '/security',
+            name: 'SecurityDashboard',
+            component: () => import('@/views/security/Dashboard.vue'),
+            meta: { title: '安全中心', icon: 'Shield' }
+          },
+          {
             path: '/security/firewall',
             name: 'SecurityFirewall',
             component: () => import('@/views/security/Firewall.vue'),
@@ -142,6 +148,69 @@ const routes = [
             name: 'SecuritySsh',
             component: () => import('@/views/security/Ssh.vue'),
             meta: { title: 'SSH配置', icon: 'Key' }
+          }
+        ]
+      },
+      {
+        path: '/cron',
+        name: 'Cron',
+        meta: { title: '计划任务', icon: 'Clock' },
+        children: [
+          {
+            path: '/cron',
+            name: 'CronList',
+            component: () => import('@/views/cron/List.vue'),
+            meta: { title: '任务列表', icon: 'List' }
+          },
+          {
+            path: '/cron/create',
+            name: 'CronCreate',
+            component: () => import('@/views/cron/Create.vue'),
+            meta: { title: '创建任务', icon: 'Plus', hidden: true }
+          }
+        ]
+      },
+      {
+        path: '/logs',
+        name: 'Logs',
+        meta: { title: '日志管理', icon: 'Document' },
+        children: [
+          {
+            path: '/logs',
+            name: 'LogsDashboard',
+            component: () => import('@/views/logs/Dashboard.vue'),
+            meta: { title: '日志中心', icon: 'Document' }
+          },
+          {
+            path: '/logs/access',
+            name: 'LogsAccess',
+            component: () => import('@/views/logs/Access.vue'),
+            meta: { title: '访问日志', icon: 'View' }
+          },
+          {
+            path: '/logs/error',
+            name: 'LogsError',
+            component: () => import('@/views/logs/Error.vue'),
+            meta: { title: '错误日志', icon: 'Warning' }
+          }
+        ]
+      },
+      {
+        path: '/monitoring',
+        name: 'Monitoring',
+        meta: { title: '监控告警', icon: 'Monitor' },
+        children: [
+          {
+            path: '/monitoring',
+            name: 'MonitoringDashboard',
+            component: () => import('@/views/monitoring/Dashboard.vue'),
+            meta: { title: '监控中心', icon: 'Monitor' }
+          },
+          {
+            path: '/monitoring/alerts',
+            name: 'MonitoringAlerts',
+            component: () => import('@/views/monitoring/Alerts.vue'),
+            meta: { title: '告警管理', icon: 'Bell' }
           }
         ]
       },
